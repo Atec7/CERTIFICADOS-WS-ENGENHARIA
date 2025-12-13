@@ -271,9 +271,7 @@ button.danger:hover { background: #c82333; }
     <a href="#secaoCursos" class="menu-link">📚 Cursos</a>
     <h3>Operação</h3>
     <a href="#secaoGeracao" class="menu-link">✨ Gerar Certificados</a>
-    <!--<a href="#secaoGerados" class="menu-link">✅ Certificados Gerados</a>-->
-    <!--<a href="#secaoBackup" class="menu-link">💾 Backup de Dados</a>-->
-</div>
+    </div>
 
 <div class="main-content">
     <header>
@@ -371,8 +369,10 @@ button.danger:hover { background: #c82333; }
                         <input id="alunoMatricula" placeholder="Ex.: 2025-001">
                     </div>
                     <div class="col-6">
-                        <label>Email</label>
-                        <input id="alunoEmail" placeholder="Ex.: maria@email.com">
+                        <label>Vínculo com Empresa</label>
+                        <select id="alunoEmpresaVinculo" required>
+                            <option value="">Selecione a empresa...</option>
+                            </select>
                     </div>
                 </div>
                 <div class="actions">
@@ -419,9 +419,18 @@ button.danger:hover { background: #c82333; }
         <div id="secaoGeracao" class="secao">
             <h2>+Gerar Certificados</h2>
             <div class="card">
+                <h3>Dados Gerais</h3>
+                <div class="grid">
+                    <div class="col-4">
+                        <label>Empresa (certificadora)</label>
+                        <select id="selEmpresa"></select>
+                    </div>
+                </div>
+
                 <h3>Alunos e Cursos</h3>
+                <p style="color:var(--muted)">*Selecione uma empresa acima para carregar a lista de alunos vinculados a ela.</p>
                 <label>Selecione alunos</label>
-                <div id="listaAlunosCheckbox" class="checklist"></div>
+                <div id="listaAlunosCheckbox" class="checklist">Nenhum aluno carregado. Selecione a empresa acima.</div>
 
                 <label>Selecione cursos</label>
                 <div id="listaCursosCheckbox" class="checklist"></div>
@@ -431,19 +440,12 @@ button.danger:hover { background: #c82333; }
                 <div id="courseDatesContainer">
                     </div>
 
-                <h3>Dados Gerais</h3>
-                <div class="grid">
-                    <div class="col-4">
-                        <label>Empresa (certificadora)</label>
-                        <select id="selEmpresa"></select>
-                    </div>
-                </div>
+                
                 
                 <div class="actions">
                     <button id="btnGerar">1. Gerar e salvar certificados</button>
                     <button class="secondary" id="btnImprimir">2. Baixar Certificado em PDF</button>
-                    <!--<button class="secondary" id="btnImprimirNativo">2b. Imprimir Nativo (Testar)</button>-->
-                </div>
+                    </div>
             </div>
 
             <h3>Preview dos Certificados (A4 Paisagem)</h3>
@@ -497,7 +499,6 @@ button.danger:hover { background: #c82333; }
         </div>
     </div>
 </div>
-
 <script type="module">
 // Importações do Firebase
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
@@ -584,6 +585,10 @@ function setupFirebaseListener(node, dataObject, renderFunc){
             Object.assign(dataObject, data);
         }
         renderFunc();
+        // Ação extra para garantir que os checklists de geração sejam atualizados
+        if (node === 'empresas') {
+            renderAlunosCheckboxForGeracao(); // Garante o filtro inicial/reset
+        }
     }, (error) => {
         console.error(`Erro ao buscar dados do nó ${node}:`, error);
         alert(`Não foi possível conectar ao banco de dados para o nó '${node}'.`);
@@ -626,22 +631,50 @@ function renderEmpresas(){
             </td>
         </tr>`).join("");
     
-    el("selEmpresa").innerHTML='<option value="">Selecione a empresa...</option>'+
-        empresas.map(e=>`<option value="${e.id}">${e.nome}</option>`).join("");
+    const empresaOptions = empresas.map(e=>`<option value="${e.id}">${e.nome}</option>`).join("");
+    
+    // Popula a seleção na aba Gerar Certificados
+    el("selEmpresa").innerHTML='<option value="">Selecione a empresa...</option>'+ empresaOptions;
+
+    // Popula a seleção na aba Cadastro de Alunos
+    el("alunoEmpresaVinculo").innerHTML='<option value="">Selecione a empresa...</option>'+ empresaOptions;
 }
+
 function renderAlunos(){
     const alunos = getArrayFromData(alunosData);
     el("tabelaAlunos").innerHTML =
-        `<tr><th>Nome</th><th>CPF</th><th>Matrícula</th><th>Email</th><th>Ações</th></tr>`+
-        alunos.map(a=>`<tr>
-            <td>${a.nome}</td><td>${formatCPF(a.cpf)}</td><td>${a.matricula}</td><td>${a.email}</td>
-            <td class="actions">
-                <button class="secondary" onclick="window.openEditModal('aluno', '${a.id}')">Editar</button>
-                <button class="danger" onclick="window.deleteAluno('${a.id}')">Excluir</button>
-            </td>
-        </tr>`).join("");
+        `<tr><th>Nome</th><th>CPF</th><th>Matrícula</th><th>Empresa Vínculo</th><th>Ações</th></tr>`+
+        alunos.map(a=>{
+            const empresaNome = a.empresaVinculoId ? (empresasData[a.empresaVinculoId]?.nome || 'Empresa removida') : 'N/A';
+            return `<tr>
+                <td>${a.nome}</td><td>${formatCPF(a.cpf)}</td><td>${a.matricula}</td><td>${empresaNome}</td>
+                <td class="actions">
+                    <button class="secondary" onclick="window.openEditModal('aluno', '${a.id}')">Editar</button>
+                    <button class="danger" onclick="window.deleteAluno('${a.id}')">Excluir</button>
+                </td>
+            </tr>`;
+        }).join("");
     
-    el("listaAlunosCheckbox").innerHTML=alunos.map(a=>`<label><input type="checkbox" value="${a.id}"> <span>${a.nome} — Mat.: ${a.matricula}</span></label>`).join("");
+    renderAlunosCheckboxForGeracao();
+}
+
+function renderAlunosCheckboxForGeracao(){
+    const empresaIdSelecionada = el("selEmpresa").value;
+    const listaAlunosCheckbox = el("listaAlunosCheckbox");
+    
+    if (!empresaIdSelecionada) {
+        listaAlunosCheckbox.innerHTML = 'Nenhum aluno carregado. Selecione a empresa acima.';
+        return;
+    }
+
+    const alunosFiltrados = getArrayFromData(alunosData).filter(a => a.empresaVinculoId === empresaIdSelecionada);
+
+    if (alunosFiltrados.length === 0) {
+        listaAlunosCheckbox.innerHTML = 'Nenhum aluno cadastrado para esta empresa.';
+        return;
+    }
+
+    listaAlunosCheckbox.innerHTML = alunosFiltrados.map(a=>`<label><input type="checkbox" value="${a.id}"> <span>${a.nome} — Mat.: ${a.matricula}</span></label>`).join("");
 }
 
 function renderCursos(){
@@ -729,6 +762,7 @@ window.closeModal = () => {
 
 window.openEditModal = (type, id) => {
     let title, bodyHTML, item;
+    const empresas = getArrayFromData(empresasData);
 
     if (type === 'empresa') {
         item = empresasData[id];
@@ -748,12 +782,21 @@ window.openEditModal = (type, id) => {
     } else if (type === 'aluno') {
         item = alunosData[id];
         title = `Editar Aluno: ${item.nome}`;
+        
+        const empresaOptions = empresas.map(e=>
+            `<option value="${e.id}" ${item.empresaVinculoId === e.id ? 'selected' : ''}>${e.nome}</option>`
+        ).join("");
+        
         bodyHTML = `
             <input type="hidden" id="modal_alunoId" value="${id}">
             <label>Nome Completo:</label><input id="modal_alunoNome" value="${item.nome}">
             <label>CPF (apenas números):</label><input id="modal_alunoCPF" value="${item.cpf}">
             <label>Matrícula:</label><input id="modal_alunoMatricula" value="${item.matricula}">
-            <label>Email:</label><input id="modal_alunoEmail" value="${item.email}">
+            <label>Vínculo com Empresa:</label>
+            <select id="modal_alunoEmpresaVinculo" required>
+                <option value="">Selecione a empresa...</option>
+                ${empresaOptions}
+            </select>
         `;
         openModal(title, bodyHTML, () => window.saveEditAluno(id));
 
@@ -827,11 +870,14 @@ window.saveEditEmpresa = async (id) => {
     window.closeModal();
 }
 window.saveEditAluno = async (id) => {
+    const empresaVinculoId = el('modal_alunoEmpresaVinculo').value.trim();
+    if (!empresaVinculoId) return alert("Selecione a empresa de vínculo para o aluno.");
+
     const patch = {
         nome: el('modal_alunoNome').value.trim(),
         cpf: el('modal_alunoCPF').value.trim().replace(/\D/g, ''),
         matricula: el('modal_alunoMatricula').value.trim(),
-        email: el('modal_alunoEmail').value.trim(),
+        empresaVinculoId: empresaVinculoId, // Novo campo
     };
     await updateItem("alunos", id, patch);
     window.closeModal();
@@ -862,7 +908,7 @@ window.saveEditCertificado = async (id) => {
         dataInicio: dataInicio,
         dataFim: dataFim,
         dataInicioBR: fmtDateBR(dataInicio), 
-        dataFimBR: fmtDateBR(dataFim),       
+        dataFimBR: fmtDateBR(dataFim),      
     };
     
     await updateItem("certificadosGerados", id, patch);
@@ -903,13 +949,16 @@ async function gerarCertificados(){
     const empresa = empresasData[empresaId]; 
     if(!empresa) return alert("Empresa inválida.");
 
-    const alunosArray = getArrayFromData(alunosData);
-    const cursosArray = getArrayFromData(cursosData);
+    // Filtrar alunos pelo ID da empresa selecionada
+    const alunosFiltrados = getArrayFromData(alunosData).filter(a => a.empresaVinculoId === empresaId);
     
     const selAlunoIds = Array.from(el("listaAlunosCheckbox").querySelectorAll("input[type=checkbox]:checked")).map(i => i.value);
     const selCursoElements = el("courseDatesContainer").querySelectorAll(".course-date-selector");
 
-    if(selAlunoIds.length === 0) return alert("Selecione pelo menos um aluno.");
+    // Filtrar a lista de alunos para processamento apenas os selecionados do filtro
+    const selecionadosAlunos = alunosFiltrados.filter(a => selAlunoIds.includes(a.id));
+
+    if(selecionadosAlunos.length === 0) return alert("Selecione pelo menos um aluno vinculado à empresa.");
     if(selCursoElements.length === 0) return alert("Selecione pelo menos um curso e defina as datas.");
 
     // Mapeia os dados de curso e data
@@ -939,8 +988,6 @@ async function gerarCertificados(){
         return alert(e.message);
     }
     
-
-    const selecionadosAlunos = alunosArray.filter(a => selAlunoIds.includes(a.id));
 
     const printArea = el("printArea");
     printArea.innerHTML = "";
@@ -1171,11 +1218,23 @@ window.saveAluno = async () => {
     const nome=el("alunoNome").value.trim();
     const cpf=el("alunoCPF").value.trim().replace(/\D/g, ''); 
     const matricula=el("alunoMatricula").value.trim();
-    const email=el("alunoEmail").value.trim();
-    if(!nome||!cpf||!matricula||!email) return alert("Preencha todos os campos obrigatórios.");
-    try { await push(ref(db, 'alunos'), { nome, cpf, matricula, email }); alert("Aluno salvo!"); window.clearAlunoForm(); } catch(e) { console.error("Erro:", e); alert("Erro ao salvar aluno."); }
+    const empresaVinculoId=el("alunoEmpresaVinculo").value.trim(); // Novo campo
+
+    if(!nome||!cpf||!matricula||!empresaVinculoId) return alert("Preencha todos os campos obrigatórios (Nome, CPF, Matrícula e Vínculo com Empresa).");
+
+    try { 
+        await push(ref(db, 'alunos'), { nome, cpf, matricula, empresaVinculoId }); 
+        alert("Aluno salvo!"); 
+        window.clearAlunoForm(); 
+    } catch(e) { 
+        console.error("Erro:", e); 
+        alert("Erro ao salvar aluno."); 
+    }
 }
-window.clearAlunoForm = () => { ["alunoNome","alunoCPF","alunoMatricula","alunoEmail"].forEach(i=>el(i).value=""); }
+window.clearAlunoForm = () => { 
+    ["alunoNome","alunoCPF","alunoMatricula"].forEach(i=>el(i).value=""); 
+    el("alunoEmpresaVinculo").value = ""; // Limpa o novo campo select
+}
 window.clearAllAlunos = async () => {
     if (!confirm("Tem certeza que deseja apagar TODOS os alunos?")) return;
     try { await remove(ref(db, 'alunos')); alert("Todos os alunos foram removidos."); } catch(e) { console.error("Erro:", e); alert("Erro ao apagar alunos."); }
@@ -1357,13 +1416,19 @@ window.buildPage2 = ({curso,empresa}) => {
 
 
 window.addEventListener('DOMContentLoaded', () => {
+    // Listeners do Firebase
     setupFirebaseListener('empresas', empresasData, renderEmpresas);
     setupFirebaseListener('alunos', alunosData, renderAlunos);
     setupFirebaseListener('cursos', cursosData, renderCursos);
     setupFirebaseListener('certificadosGerados', certificadosGeradosData, renderCertificadosGerados); 
 
+    // Navegação
     setupNavigation();
 
+    // Evento de Filtro de Alunos na Geração
+    el("selEmpresa").addEventListener('change', renderAlunosCheckboxForGeracao);
+
+    // Botões de Ação
     el("btnSalvarEmpresa").onclick=window.saveEmpresa;
     el("btnLimparEmpresa").onclick=window.clearEmpresaForm;
     el("btnSalvarAluno").onclick=window.saveAluno;
