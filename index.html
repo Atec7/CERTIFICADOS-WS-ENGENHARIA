@@ -769,13 +769,33 @@ window.openEditModal = (type, id) => {
         title = `Editar Empresa: ${item.nome}`;
         bodyHTML = `
             <input type="hidden" id="modal_empresaId" value="${id}">
-            <label>Nome da Empresa:</label><input id="modal_empresaNome" value="${item.nome}">
-            <label>Cidade:</label><input id="modal_empresaCidade" value="${item.cidade || ''}">
-            <label>Nome do Certificador:</label><input id="modal_certificadorNome" value="${item.certificadorNome || ''}">
-            <label>Nome da Assinatura 2:</label><input id="modal_assinaturaNome2" value="${item.assinaturaNome2 || ''}">
-            <label>Nome da Assinatura 3:</label><input id="modal_assinaturaNome3" value="${item.assinaturaNome3 || ''}">
-            <label>Nome Assinatura Aluno:</label><input id="modal_assinaturaNomeAluno" value="${item.assinaturaNomeAluno || ''}">
-            <p style="margin-top:15px;color:var(--danger);">*Obs: Para trocar imagens, use o formulário completo da aba "Empresa".</p>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                <div>
+                    <label>Nome:</label><input id="modal_empresaNome" value="${item.nome}">
+                    <label>Cidade:</label><input id="modal_empresaCidade" value="${item.cidade || ''}">
+                    <label>Certificador:</label><input id="modal_certificadorNome" value="${item.certificadorNome || ''}">
+                </div>
+                <div>
+                    <label>Assinatura 2:</label><input id="modal_assinaturaNome2" value="${item.assinaturaNome2 || ''}">
+                    <label>Assinatura 3:</label><input id="modal_assinaturaNome3" value="${item.assinaturaNome3 || ''}">
+                    <label>Assinatura Aluno:</label><input id="modal_assinaturaNomeAluno" value="${item.assinaturaNomeAluno || ''}">
+                </div>
+            </div>
+            <hr>
+            <p><b>Substituir Imagens (opcional):</b></p>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; font-size:12px;">
+                <div>
+                    <label>Logo 1:</label><input type="file" id="edit_logo1">
+                    <label>Logo 2:</label><input type="file" id="edit_logo2">
+                    <label>Fundo:</label><input type="file" id="edit_fundo">
+                </div>
+                <div>
+                    <label>Assin. 1:</label><input type="file" id="edit_ass1">
+                    <label>Assin. 2:</label><input type="file" id="edit_ass2">
+                    <label>Assin. 3:</label><input type="file" id="edit_ass3">
+                    <label>Assin. Aluno:</label><input type="file" id="edit_assAluno">
+                </div>
+            </div>
         `;
         openModal(title, bodyHTML, () => window.saveEditEmpresa(id));
 
@@ -858,16 +878,54 @@ window.openEditCertificadoModal = (id) => {
 };
 
 window.saveEditEmpresa = async (id) => {
-    const patch = {
-        nome: el('modal_empresaNome').value.trim(),
-        cidade: el('modal_empresaCidade').value.trim(),
-        certificadorNome: el('modal_certificadorNome').value.trim(),
-        assinaturaNome2: el('modal_assinaturaNome2').value.trim(),
-        assinaturaNome3: el('modal_assinaturaNome3').value.trim(),
-        assinaturaNomeAluno: el('modal_assinaturaNomeAluno').value.trim(),
-    };
-    await updateItem("empresas", id, patch);
-    window.closeModal();
+    const btn = el('modalSaveButton');
+    btn.textContent = "Salvando...";
+    btn.disabled = true;
+
+    try {
+        // Coleta os textos básicos
+        const patch = {
+            nome: el('modal_empresaNome').value.trim(),
+            cidade: el('modal_empresaCidade').value.trim(),
+            certificadorNome: el('modal_certificadorNome').value.trim(),
+            assinaturaNome2: el('modal_assinaturaNome2').value.trim(),
+            assinaturaNome3: el('modal_assinaturaNome3').value.trim(),
+            assinaturaNomeAluno: el('modal_assinaturaNomeAluno').value.trim(),
+        };
+
+        // Mapeamento: ID do input no modal -> Nome da chave no Firebase
+        const uploads = [
+            { id: "edit_logo1", key: "logo1" },
+            { id: "edit_logo2", key: "logo2" },
+            { id: "edit_fundo", key: "fundo" },
+            { id: "edit_ass1",  key: "assinaturaCert" },
+            { id: "edit_ass2",  key: "assinaturaImg2" },
+            { id: "edit_ass3",  key: "assinaturaImg3" },
+            { id: "edit_assAluno", key: "assinaturaImgAluno" }
+        ];
+
+        // Processa cada arquivo
+        for (const up of uploads) {
+            const inputElement = el(up.id);
+            if (inputElement && inputElement.files && inputElement.files.length > 0) {
+                // Usa a sua função original toBase64File
+                const base64 = await toBase64File(inputElement);
+                if (base64) {
+                    const url = await uploadImageToImgBB(base64);
+                    if (url) patch[up.key] = url;
+                }
+            }
+        }
+
+        await updateItem("empresas", id, patch);
+        window.closeModal();
+    } catch (e) {
+        console.error(e);
+        alert("Erro ao atualizar dados.");
+    } finally {
+        btn.textContent = "Salvar Alterações";
+        btn.disabled = false;
+    }
 }
 window.saveEditAluno = async (id) => {
     const empresaVinculoId = el('modal_alunoEmpresaVinculo').value.trim();
@@ -923,22 +981,28 @@ window.deleteCurso = (id) => { removeItem("cursos", id); }
 
 
 function buildMensagemCurso(curso, aluno, dataInicioBR, dataFimBR, empresa){
+    // Lógica para data única ou período
+    const textoData = (dataInicioBR === dataFimBR) 
+        ? `no dia **${dataInicioBR}**` 
+        : `no período de **${dataInicioBR}** a **${dataFimBR}**`;
+
     const base = curso.mensagem.trim().length > 0
         ? curso.mensagem
-        : `Certificamos que, o(a) aluno(a) **{NOME_ALUNO}**, portador(a) do CPF **{CPF_ALUNO}**, participou do curso de **{NOME_CURSO}**, realizado no período de **{DATA_INICIO}** a **{DATA_FIM}**, com carga horária total de **{CARGA_HORARIA}**, promovido pela empresa **{NOME_EMPRESA}**.
+        : `Certificamos que, o(a) aluno(a) **{NOME_ALUNO}**, portador(a) do CPF **{CPF_ALUNO}**, participou do curso de **{NOME_CURSO}**, realizado {TEXTO_DATA}, com carga horária total de **{CARGA_HORARIA}**, promovido pela empresa **{NOME_EMPRESA}**.
         
-        {CIDADE_EMPRESA}, {DATA_ATUAL_COMPLETA}.`;
+        {CIDADE_EMPRESA}, {DATA_FIM_TREINAMENTO}.`;
 
     return base
         .replaceAll("{NOME_ALUNO}", aluno.nome)
         .replaceAll("{CPF_ALUNO}", formatCPF(aluno.cpf))
         .replaceAll("{NOME_CURSO}", curso.nome)
+        .replaceAll("{TEXTO_DATA}", textoData) // Nova variável
         .replaceAll("{DATA_INICIO}", dataInicioBR)
         .replaceAll("{DATA_FIM}", dataFimBR)
         .replaceAll("{CARGA_HORARIA}", curso.carga)
         .replaceAll("{NOME_EMPRESA}", empresa.nome)
         .replaceAll("{CIDADE_EMPRESA}", empresa.cidade)
-        .replaceAll("{DATA_ATUAL_COMPLETA}", fmtDateFullBR());
+        .replaceAll("{DATA_FIM_TREINAMENTO}", dataFimBR); // Emissão = Fim do curso
 }
 
 async function gerarCertificados(){
@@ -1289,7 +1353,7 @@ function setupNavigation() {
 
 
 
-window.buildPage1 = ({aluno,curso,empresa,dataInicioBR,dataFimBR}) => {
+window.buildPage1 = ({aluno, curso, empresa, dataInicioBR, dataFimBR}) => {
     const mensagem = buildMensagemCurso(curso, aluno, dataInicioBR, dataFimBR, empresa);
     
     const signatures = [
@@ -1299,47 +1363,72 @@ window.buildPage1 = ({aluno,curso,empresa,dataInicioBR,dataFimBR}) => {
         { nome: empresa.assinaturaNomeAluno || 'Aluno(a) Certificado(a)', img: empresa.assinaturaImgAluno } 
     ].filter(s => s.nome || s.img); 
 
-    const signatureWidth = signatures.length > 0 ? (90/signatures.length)+'%' : '100%';
+    const signatureWidth = signatures.length > 0 ? (100 / signatures.length) + '%' : '100%';
 
-    const signatureHTML = signatures.map(sig => `
-        <div style="text-align:center;width:${signatureWidth}; min-width:120px;">
-            ${sig.img ? `<img src="${sig.img}" alt="Assinatura" style="max-height:40px;width:100%;object-fit:contain;margin-bottom:0;">` : ''}
-            <hr style="border:0;border-top:1px solid #000;margin:5px 0;">
-            <div style="font-size:10pt;font-weight:bold;">${sig.nome}</div>
-        </div>
-    `).join('');
+    const signatureHTML = `
+        <table style="width: 100%; border-collapse: collapse; table-layout: fixed; margin-top: 5mm;">
+            <tr>
+                ${signatures.map(sig => `
+                    <td style="width: ${signatureWidth}; text-align: center; vertical-align: bottom; padding: 0 10px;">
+                        <div style="display: inline-block; width: 100%; position: relative;">
+                            
+                            <div style="height: 60px; display: flex; align-items: flex-end; justify-content: center; line-height: 0;">
+                                ${sig.img ? `
+                                    <img src="${sig.img}" style="
+                                        max-height: 75px; 
+                                        width: auto; /* Mantém a proporção original sem esticar */
+                                        display: block;
+                                        mix-blend-mode: multiply; /* Tenta remover fundo branco no PDF */
+                                        filter: contrast(1.2) brightness(1.1);
+                                        margin-bottom: -1px; /* Ajuste milimétrico para tocar a linha */
+                                        position: relative;
+                                        z-index: 10;
+                                    ">` : '<div style="height:60px;"></div>'}
+                            </div>
+
+                            <div style="border-top: 1.5px solid #000; width: 100%; margin: 0 auto;"></div>
+
+                            <div style="font-size: 9pt; font-weight: bold; text-transform: uppercase; margin-top: 5px; font-family: sans-serif;">
+                                ${sig.nome}
+                            </div>
+                        </div>
+                    </td>
+                `).join('')}
+            </tr>
+        </table>
+    `;
 
     const pageStyle = `
-        width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: space-between;
-        padding: 25mm; box-sizing: border-box; 
-        font-family: 'Times New Roman', Times, serif; color: #333;
+        width: 297mm; height: 210mm; display: flex; flex-direction: column; justify-content: space-between;
+        padding: 20mm; box-sizing: border-box; position: relative;
+        font-family: 'Times New Roman', Times, serif; color: #000; background-color: #fff;
         ${empresa.fundo ? `background-image: url('${empresa.fundo}'); background-repeat: no-repeat; background-size: cover; background-position: center;` : ""}
     `.trim();
     
     return `
       <section class="cert-page" style="${pageStyle}">
-        <div style="display:flex;justify-content:space-between;align-items:center;height:25mm;">
-          ${empresa.logo1 ? `<img src="${empresa.logo1}" alt="Logo 1" style="max-height:20mm;max-width:30%;object-fit:contain;">` : '<div></div>'}
-          <h1 style="font-size:30pt;margin:0;font-weight:700;color:var(--primary);">CERTIFICADO</h1>
-          ${empresa.logo2 ? `<img src="${empresa.logo2}" alt="Logo 2" style="max-height:20mm;max-width:30%;object-fit:contain;">` : '<div></div>'}
+        <div style="display:flex; justify-content:space-between; align-items:center; height:25mm;">
+          ${empresa.logo1 ? `<img src="${empresa.logo1}" style="max-height:22mm; max-width:25%; object-fit:contain;">` : '<div></div>'}
+          <h1 style="font-size:38pt; margin:0; font-weight:bold; color:#000;">CERTIFICADO</h1>
+          ${empresa.logo2 ? `<img src="${empresa.logo2}" style="max-height:22mm; max-width:25%; object-fit:contain;">` : '<div></div>'}
         </div>
 
-        <main style="text-align:center;flex-grow:1;display:flex;flex-direction:column;justify-content:center;margin: 10mm 0;">
-          <h2 style="font-size:16pt;margin:0 0 10mm;font-weight:400;color:#555;">Conferimos a presente certificação a:</h2>
-          <p style="font-size:32pt;font-weight:900;color:#000;border-bottom:3px solid #000;display:inline-block;padding:0 5mm;margin:0 auto 10mm;">
+        <main style="text-align:center; flex-grow:1; display:flex; flex-direction:column; justify-content:center;">
+          <h2 style="font-size:16pt; margin-bottom:8mm; font-weight:normal;">Certificamos que</h2>
+          <p style="font-size:32pt; font-weight:bold; border-bottom:2px solid #000; display:inline-block; padding:0 10px; margin-bottom:10mm;">
             ${aluno.nome.toUpperCase()}
           </p>
-          <div style="font-size:14pt;line-height:1.8;color:#333;padding:0 15mm;text-align:justify;text-align-last:center;">
+          <div style="font-size:14pt; line-height:1.7; text-align:justify; text-align-last:center;">
             ${mensagem.replaceAll('**', '<strong>').replaceAll('\n\n', '<br><br>')}
           </div>
         </main>
 
-        <footer class="signatures" style="display:flex;justify-content:space-around;gap:10mm;margin-top:15mm;padding-bottom:10mm;flex-wrap:wrap;border-bottom:1px solid #eee;">
+        <footer style="width:100%; margin-top:5mm;">
             ${signatureHTML}
         </footer>
         
-        <div style="text-align:center;font-size:8pt;color:#888;margin-top:5mm;">
-            Certificado de Conclusão - Documento emitido em conformidade com a legislação educacional. Página 1.
+        <div style="text-align:center; font-size:8pt; color:#888; margin-top:5mm;">
+            Página 1 de 2
         </div>
       </section>
     `;
