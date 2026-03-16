@@ -282,6 +282,16 @@ button.danger:hover { background: #c82333; }
 .branco{
   color: red;
 }
+.logo-do-curso{
+  width: 150px;
+  text-align: center;
+  background-color:white;
+  border-radius: 50px;
+}
+.nome-sistema{
+  text-align: center;
+  
+}
 </style>
 </head>
 <body>
@@ -297,7 +307,7 @@ button.danger:hover { background: #c82333; }
 </div>
 
 <div class="main-content">
-    <header>
+    <header class="nome-sistema">
         Sistema de Certificados WS ENGENHARIA CONSULTORIA E TREINAMENTOS (Versão V2.8 - Atecseven Tecnologia LTDA)
     </header>
     <div class="container">
@@ -315,6 +325,7 @@ button.danger:hover { background: #c82333; }
                         <label>Cidade</label>
                         <input id="empresaCidade" placeholder="Ex: Morrinhos - BA">
                     </div>
+                    
                     <div class="col-4">
                         <label>Logo esquerda</label>
                         <input type="file" id="empresaLogo1" accept="image/*">
@@ -324,7 +335,7 @@ button.danger:hover { background: #c82333; }
                         <input type="file" id="empresaLogo2" accept="image/*">
                     </div>
                     <div class="col-4">
-                        <label>Fundo da página 1</label>
+                        <label>Fundo do Certificado</label>
                         <input type="file" id="empresaFundo" accept="image/*">
                     </div>
 
@@ -443,11 +454,16 @@ button.danger:hover { background: #c82333; }
             <h2>📚 Cadastro de Cursos</h2>
             <div class="card">
                 <div class="grid">
-                    <div class="col-6">
+                    <div class="col-12">
                         <label>Nome do curso</label>
-                        <input id="cursoNome" placeholder="Ex.: Excel Avançado">
+                        <input id="cursoNome" placeholder="Ex.: NR - 10 ">
                     </div>
-                    <div class="col-6">
+                    <div class="col-4">
+                      <label>Logo do Curso</label>
+                    <input type="file" id="cursoLogoCurso" accept="image/*" class="logo-do-curso">
+                    </div>
+                    
+                    <div class="col-3">
                         <label>Carga horária</label>
                         <input id="cursoCarga" placeholder="Ex.: 40h">
                     </div>
@@ -473,7 +489,7 @@ button.danger:hover { background: #c82333; }
         </div>
 
         <div id="secaoGeracao" class="secao">
-            <h2>+Gerar Certificados</h2>
+            <h2>Gerar Certificados</h2>
             <div class="card">
                 <h3>Dados Gerais</h3>
                 <div class="grid">
@@ -561,7 +577,7 @@ button.danger:hover { background: #c82333; }
 </div>
 
 <script type="module">
-    // Importações do Firebase
+  // Importações do Firebase
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
 import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-analytics.js";
 import { getDatabase, ref, push, set, update, remove, onValue } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
@@ -909,6 +925,8 @@ window.openEditModal = (type, id) => {
             <input type="hidden" id="modal_cursoId" value="${id}">
             <label>Nome do Curso:</label><input id="modal_cursoNome" value="${item.nome}">
             <label>Carga Horária:</label><input id="modal_cursoCarga" value="${item.carga}">
+            <label>Logo do Curso (aparece na página 1 do certificado):</label>
+            <input type="file" id="edit_logoCurso" accept="image/*">
             <label>Mensagem Padrão (Pág 1):</label><textarea id="modal_cursoMensagem" rows="5">${item.mensagem || ''}</textarea>
             <label>Conteúdo Programático (Pág 2 - Uma linha por tópico):</label><textarea id="modal_cursoConteudo" rows="8">${item.conteudo || ''}</textarea>
         `;
@@ -1028,14 +1046,36 @@ window.saveEditAluno = async (id) => {
 }
 
 window.saveEditCurso = async (id) => {
-    const patch = {
-        nome: el('modal_cursoNome').value.trim(),
-        carga: el('modal_cursoCarga').value.trim(),
-        mensagem: el('modal_cursoMensagem').value.trim(),
-        conteudo: el('modal_cursoConteudo').value.trim(),
-    };
-    await updateItem("cursos", id, patch);
-    window.closeModal();
+    const btn = el('modalSaveButton');
+    btn.textContent = "Salvando...";
+    btn.disabled = true;
+
+    try {
+        const patch = {
+            nome: el('modal_cursoNome').value.trim(),
+            carga: el('modal_cursoCarga').value.trim(),
+            mensagem: el('modal_cursoMensagem').value.trim(),
+            conteudo: el('modal_cursoConteudo').value.trim(),
+        };
+
+        const logoInput = el("edit_logoCurso");
+        if (logoInput && logoInput.files && logoInput.files.length > 0) {
+            const base64 = await toBase64File(logoInput);
+            if (base64) {
+                const url = await uploadImageToImgBB(base64);
+                if (url) patch.logoCurso = url;
+            }
+        }
+
+        await updateItem("cursos", id, patch);
+        window.closeModal();
+    } catch (e) {
+        console.error(e);
+        alert("Erro ao atualizar curso.");
+    } finally {
+        btn.textContent = "Salvar Alterações";
+        btn.disabled = false;
+    }
 }
 
 window.saveEditCertificado = async (id) => {
@@ -1142,7 +1182,8 @@ async function gerarCertificados(){
                     nome: curso.nome, 
                     carga: curso.carga, 
                     mensagem: curso.mensagem, 
-                    conteudo: curso.conteudo 
+                    conteudo: curso.conteudo,
+                    logoCurso: curso.logoCurso 
                 },
                 empresa: empresa, 
                 dataInicio: dataInicio, dataFim: dataFim,
@@ -1159,7 +1200,6 @@ async function gerarCertificados(){
         });
     });
 
-    // Lista(s) de presença – uma por curso selecionado
     selectedCoursesWithDates.forEach(item => {
         printAreaPresencas.innerHTML += window.buildListaPresenca({
             curso: item.curso,
@@ -1170,7 +1210,6 @@ async function gerarCertificados(){
         });
     });
 
-    // Download automático da(s) lista(s) de presença em PDF (retrato)
     if (printAreaPresencas.innerHTML.trim() !== "") {
         const tempContainerPresenca = document.createElement('div');
         tempContainerPresenca.innerHTML = printAreaPresencas.innerHTML;
@@ -1409,10 +1448,31 @@ window.saveCurso = async () => {
     const carga=el("cursoCarga").value.trim();
     const mensagem=el("cursoMensagem").value.trim();
     const conteudo=el("cursoConteudo").value.trim();
+    
     if(!nome||!carga) return alert("Informe nome e carga horária do curso.");
-    try { await push(ref(db, 'cursos'), { nome, carga, mensagem, conteudo }); alert("Curso salvo!"); window.clearCursoForm(); } catch(e) { console.error("Erro:", e); alert("Erro ao salvar curso."); }
+    
+    let logoCursoUrl = null;
+    const logoInput = el("cursoLogoCurso");
+    if (logoInput && logoInput.files && logoInput.files.length > 0) {
+        const base64 = await toBase64File(logoInput);
+        if (base64) {
+            logoCursoUrl = await uploadImageToImgBB(base64);
+        }
+    }
+    
+    try { 
+        await push(ref(db, 'cursos'), { nome, carga, mensagem, conteudo, logoCurso: logoCursoUrl }); 
+        alert("Curso salvo!"); 
+        window.clearCursoForm(); 
+    } catch(e) { 
+        console.error("Erro:", e); 
+        alert("Erro ao salvar curso."); 
+    }
 }
-window.clearCursoForm = () => { ["cursoNome","cursoCarga","cursoMensagem","cursoConteudo"].forEach(i=>el(i).value=""); }
+window.clearCursoForm = () => { 
+    ["cursoNome","cursoCarga","cursoMensagem","cursoConteudo"].forEach(i=>el(i).value=""); 
+    el("cursoLogoCurso").value = "";
+}
 window.clearAllCursos = async () => {
     if (!confirm("Tem certeza que deseja apagar TODOS os cursos?")) return;
     try { await remove(ref(db, 'cursos')); alert("Todos os cursos foram removidos."); } catch(e) { console.error("Erro:", e); alert("Erro ao apagar cursos."); }
@@ -1540,7 +1600,7 @@ window.buildPage1 = ({aluno, curso, empresa, dataInicioBR, dataFimBR}) => {
         <div style="display:flex; justify-content:space-between; align-items:center; height:25mm;">
           ${empresa.logo1 ? `<img src="${empresa.logo1}" style="max-height:22mm; max-width:25%; object-fit:contain;">` : '<div></div>'}
           <h1 style="font-size:38pt; margin:0; font-weight:bold; color:#000;">CERTIFICADO</h1>
-          ${empresa.logo2 ? `<img src="${empresa.logo2}" style="max-height:22mm; max-width:25%; object-fit:contain;">` : '<div></div>'}
+          ${curso.logoCurso ? `<img src="${curso.logoCurso}" style="max-height:22mm; max-width:25%; object-fit:contain;">` : (empresa.logo2 ? `<img src="${empresa.logo2}" style="max-height:22mm; max-width:25%; object-fit:contain;">` : '<div></div>')}
         </div>
 
         <main style="text-align:center; flex-grow:1; display:flex; flex-direction:column; justify-content:center;">
@@ -1609,14 +1669,20 @@ window.buildPage2 = ({curso,empresa}) => {
     return `
       <section class="cert-page2" style="${pageStyle}">
         <div style="border:1px solid #aaa;padding:10mm;height:100%;display:flex;flex-direction:column;position:relative;">
-          <header style="text-align:center;margin-bottom:10mm;">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;height:15mm;">
+                    <header style="margin-bottom:10mm;">
+            <div style="display:flex;justify-content:space-between;align-items:center;height:15mm;">
                 ${empresa.logo1 ? `<img src="${empresa.logo1}" alt="Logo 1" style="max-height:15mm;max-width:20%;object-fit:contain;">` : '<div style="width:20%;"></div>'}
-                <h2 style="font-size:15pt;margin:0;color:var(--primary);flex-grow:1;">CONTEÚDO PROGRAMÁTICO</h2>
+                <div style="flex-grow:1;text-align:center;">
+                    <h2 style="font-size:20pt;margin:0;color:#333;">CONTEÚDO PROGRAMÁTICO</h2>
+                </div>
+                ${empresa.logo2 ? `<img src="${empresa.logo2}" alt="Logo 2" style="max-height:15mm;max-width:20%;object-fit:contain;">` : '<div style="width:20%;"></div>'}
             </div>
-            <p style="font-size:12pt;margin:0;">${curso.nome} | ${empresa.nome}</p>
-            <hr style="border:0;border-top:2px solid #aaa;margin:10px auto;width:50%;">
+            <div style="text-align:center;margin-top:6px;">
+                <p style="font-size:12pt;margin:0;">${curso.nome}</p>
+                <p style="font-size:11pt;margin:2px 0 0 0;">${empresa.nome}</p>
+            </div>
           </header>
+
           <div style="flex-grow:1;overflow-y:auto;padding-bottom:10mm;"> 
             ${listHTML}
           </div>
@@ -1633,65 +1699,89 @@ window.buildListaPresenca = ({curso, empresa, dataInicioBR, dataFimBR, alunos}) 
         ? `Data: ${dataInicioBR}`
         : `Período: ${dataInicioBR} a ${dataFimBR}`;
 
+    const lines = (curso.conteudo || "").split("\n").map(l=>l.trim()).filter(Boolean);
+    
+    const conteudoHTML = lines.length > 0
+        ? `<div style="margin:15px 0; padding:12px; background:#f9f9f9; border:1px solid #ddd; border-radius:6px;">
+            <h4 style="margin:0 0 8px 0; font-size:11pt; font-weight:bold;">Conteúdo Programático:</h4>
+            <ul style="margin:0; padding-left:20px; font-size:9pt; line-height:1.5;">
+                ${lines.map(l=>`<li style="margin-bottom:4px;">${l}</li>`).join("")}
+            </ul>
+        </div>`
+        : '';
+
     const linhas = alunos.map((a, idx) => `
-        <tr style="border-bottom:1px solid #ddd;">
-            <td style="padding:10px 8px; text-align:center; font-size:10pt;">${idx+1}</td>
-            <td style="padding:10px 8px; font-size:10pt;">${a.nome}</td>
-            <td style="padding:10px 8px; text-align:center; font-size:10pt;">${formatCPF(a.cpf)}</td>
-            <td style="padding:10px 8px; border-left:1px solid #ddd;"></td>
+        <tr style="border-bottom:1px solid #ccc;">
+            <td style="padding:12px 8px; text-align:center; font-size:10pt; border-right:1px solid #ccc;">${idx+1}</td>
+            <td style="padding:12px 8px; font-size:10pt; border-right:1px solid #ccc;">${a.nome}</td>
+            <td style="padding:12px 8px; text-align:center; font-size:10pt; border-right:1px solid #ccc;">${formatCPF(a.cpf)}</td>
+            <td style="padding:12px 8px;"></td>
         </tr>
     `).join("");
 
     return `
       <section style="width:100%; max-width:210mm; margin:0 auto; padding:15mm; background:#fff; font-family:Arial,sans-serif; page-break-after:always;">
         
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; padding-bottom:12px; border-bottom:2px solid #000;">
-            ${empresa.logo1 ? `<img src="${empresa.logo1}" style="max-height:35px; max-width:150px; object-fit:contain;">` : '<div style="width:150px;"></div>'}
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; padding-bottom:12px; border-bottom:3px solid #000;">
+            ${empresa.logo1 ? `<img src="${empresa.logo1}" style="max-height:40px; max-width:120px; object-fit:contain;">` : '<div style="width:120px;"></div>'}
             <div style="text-align:center; flex-grow:1;">
-                <h2 style="margin:0 0 6px 0; font-size:18pt; font-weight:bold; text-transform:uppercase;">LISTA DE PRESENÇA</h2>
+                <h2 style="margin:0 0 6px 0; font-size:20pt; font-weight:bold; text-transform:uppercase; color:#333;">LISTA DE PRESENÇA</h2>
                 <p style="margin:2px 0; font-size:10pt;"><strong>Empresa:</strong> ${empresa.nome}</p>
                 <p style="margin:2px 0; font-size:10pt;"><strong>Curso:</strong> ${curso.nome} (${curso.carga})</p>
                 <p style="margin:2px 0; font-size:10pt;"><strong>${tituloData}</strong></p>
             </div>
-            ${empresa.logo2 ? `<img src="${empresa.logo2}" style="max-height:35px; max-width:150px; object-fit:contain;">` : '<div style="width:150px;"></div>'}
+            <div style="display:flex; flex-direction:column; align-items:flex-end; gap:4px; min-width:120px;">
+                ${empresa.logo2 ? `<img src="${empresa.logo2}" style="max-height:26px; max-width:120px; object-fit:contain;">` : ''}
+                ${curso.logoCurso ? `<img src="${curso.logoCurso}" style="max-height:26px; max-width:120px; object-fit:contain;">` : ''}
+            </div>
         </div>
 
-        <table style="width:100%; border-collapse:collapse; margin-top:15px;">
+        ${conteudoHTML}
+
+        <table style="width:100%; border-collapse:collapse; border:1px solid #000; margin-top:15px;">
             <thead>
-                <tr style="border-bottom:2px solid #000;">
-                    <th style="padding:8px; text-align:center; font-size:11pt; font-weight:bold; width:40px;">#</th>
-                    <th style="padding:8px; text-align:left; font-size:11pt; font-weight:bold;">Nome do Participante</th>
-                    <th style="padding:8px; text-align:center; font-size:11pt; font-weight:bold; width:110px;">CPF</th>
-                    <th style="padding:8px; text-align:center; font-size:11pt; font-weight:bold; width:180px; border-left:1px solid #000;">Assinatura</th>
+                <tr style="background:#f0f0f0; border-bottom:2px solid #000;">
+                    <th style="padding:10px 8px; text-align:center; font-size:11pt; font-weight:bold; width:50px; border-right:1px solid #000;">#</th>
+                    <th style="padding:10px 8px; text-align:left; font-size:11pt; font-weight:bold; border-right:1px solid #000;">Nome do Participante</th>
+                    <th style="padding:10px 8px; text-align:center; font-size:11pt; font-weight:bold; width:110px; border-right:1px solid #000;">CPF</th>
+                    <th style="padding:10px 8px; text-align:center; font-size:11pt; font-weight:bold; width:220px;">Assinatura</th>
                 </tr>
             </thead>
             <tbody>
                 ${linhas}
             </tbody>
         </table>
-        <p style="margin-top:18px; font-size:9pt; text-align:justify;">
+
+        <p style="margin-top:18px; font-size:9pt; text-align:justify; line-height:1.4;">
             &#x261E; Declaro ter recebido instruções sobre o assunto acima descrito, 
             comprometendo-me a segui-las e obedecê-las durante a execução de todas as 
             minhas atividades na empresa.
         </p>
 
-                <div style="margin-top:40px; text-align:center; font-size:10pt;">
-            <p style="margin-bottom:30px;">
-                Declaro que os participantes acima estiveram presentes no treinamento mencionado.
-            </p>
-            <div style="display:inline-block; width:70%; text-align:center; margin-top:20px;">
-                <div style="border-top:1.5px solid #000; padding-top:6px;">
+        <div style="margin-top:35px; text-align:center; font-size:10pt;">
+            <div style="display:inline-block; width:70%; text-align:center;">
+                <div style="height:70px; display:flex; align-items:flex-end; justify-content:center; margin-bottom:4px;">
+                    ${empresa.assinaturaCert ? `
+                        <img src="${empresa.assinaturaCert}" style="
+                            max-height:70px;
+                            width:auto;
+                            display:block;
+                            mix-blend-mode:multiply;
+                            filter:contrast(1.1) brightness(1.05);
+                        ">
+                    ` : ''}
+                </div>
+                <div style="border-top:2px solid #000; padding-top:8px;">
                     <div style="font-weight:bold; font-size:11pt;">
                         WEDSON DE JESUS SANTOS
                     </div>
-                    <div style="font-size:9pt; margin-top:2px;">
-                        ENGENHEIRO CIVIL, ENGENHEIRO DE SEGURANÇA DO TRABALHO E
+                    <div style="font-size:9pt; margin-top:3px; line-height:1.3;">
+                        ENGENHEIRO CIVIL, ENGENHEIRO DE SEGURANÇA DO TRABALHO E<br>
                         ENGENHEIRO AMBIENTAL E SANEAMENTO BÁSICO - CREA-BA 0516926055
                     </div>
                 </div>
             </div>
         </div>
-
 
       </section>
     `;
