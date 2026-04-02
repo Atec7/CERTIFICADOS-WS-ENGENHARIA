@@ -8,6 +8,103 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
 <style>
+.login-screen{
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: linear-gradient(180deg, #f4f8fc 0%, #eaf1f8 100%);
+  z-index: 9999;
+}
+
+.login-card{
+  width: 100%;
+  max-width: 380px;
+  background: #fff;
+  border: 1px solid #dbe3ee;
+  border-radius: 18px;
+  box-shadow: 0 10px 30px rgba(15,23,42,.10);
+  padding: 24px;
+}
+
+.login-card h1{
+  margin: 0 0 6px;
+  color: #0b5cab;
+  font-size: 28px;
+  text-align: center;
+}
+
+.login-subtitle{
+  margin: 0 0 18px;
+  color: #6b7280;
+  text-align: center;
+  font-size: 14px;
+}
+
+.login-card label{
+  display:block;
+  margin: 12px 0 6px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #6b7280;
+}
+
+.login-card input{
+  width:100%;
+  padding:12px;
+  border:1px solid #dbe3ee;
+  border-radius:12px;
+  font-size:14px;
+}
+
+.login-card input:focus{
+  outline:none;
+  border-color:#0b5cab;
+  box-shadow:0 0 0 4px rgba(11,92,171,.10);
+}
+
+#btnEntrarSistema{
+  width:100%;
+  margin-top:16px;
+  padding:12px;
+  border:none;
+  border-radius:12px;
+  background:#0b5cab;
+  color:#fff;
+  font-weight:700;
+  cursor:pointer;
+}
+
+#btnEntrarSistema:hover{
+  background:#08498a;
+}
+
+.login-error{
+  display:none;
+  margin-top:12px;
+  padding:10px 12px;
+  border-radius:12px;
+  background:#fff1f2;
+  color:#b42318;
+  border:1px solid #fecdd3;
+  font-size:13px;
+}
+
+.logout-btn{
+  border:none;
+  border-radius:10px;
+  padding:10px 14px;
+  background:#f3f4f6;
+  color:#111827;
+  font-weight:700;
+  cursor:pointer;
+}
+
+.logout-btn:hover{
+  background:#e5e7eb;
+}
 
 :root {
     --primary: #004e92;
@@ -295,6 +392,30 @@ button.danger:hover { background: #c82333; }
 </style>
 </head>
 <body>
+<div id="loginScreen" class="login-screen">
+  <div class="login-card">
+    <h1>WS Certificados</h1>
+    <p class="login-subtitle">Acesso ao sistema</p>
+
+    <label for="loginUsuario">Usuário</label>
+    <input id="loginUsuario" type="text" placeholder="Digite o usuário">
+
+    <label for="loginSenha">Senha</label>
+    <input id="loginSenha" type="password" placeholder="Digite a senha">
+
+    <button id="btnEntrarSistema" type="button">Entrar</button>
+
+    <div id="loginError" class="login-error">Usuário ou senha inválidos.</div>
+  </div>
+</div>
+
+<div id="appShell" style="display:none;">
+  <!-- TODO O SEU SISTEMA ATUAL FICA AQUI DENTRO -->
+
+  <div style="padding:10px; text-align:right; background:#fff; border-bottom:1px solid #ddd;">
+    <button id="btnLogout" type="button" class="logout-btn">Sair</button>
+  </div>
+</div>
 
 <div class="sidebar">
     <div class="sidebar-title">CERTIFICADOS</div>
@@ -379,7 +500,15 @@ button.danger:hover { background: #c82333; }
                     <button id="btnSalvarEmpresa">Salvar empresa</button>
                     <button class="secondary" id="btnLimparEmpresa">Limpar formulário</button>
                 </div>
+                <div class="grid">
+  <div class="col-6">
+    <label>Busca rápida de empresas</label>
+    <input id="empresaBuscaRapida" placeholder="Digite parte do nome da empresa ou cidade">
+  </div>
+</div>
+
                 <h3>Empresas cadastradas</h3>
+
                 <table class="table" id="tabelaEmpresas"></table>
             </div>
         </div>
@@ -469,7 +598,7 @@ button.danger:hover { background: #c82333; }
                     </div>
                     <div class="col-12">
                         <label class="branco"><b>*SEMPRE DEIXAR EM BRANCO</b></label>
-                        <textarea id="cursoMensagem" placeholder='Certificamos que, o(a) aluno(a) **{NOME_ALUNO}**, portador(a) do CPF **{CPF_ALUNO}**, participou do curso de **{NOME_CURSO}**, realizado no período de **{DATA_INICIO}** a **{DATA_FIM}**, com carga horária total de **{CARGA_HORARIA}**, promovido pela empresa **{NOME_EMPRESA}**.
+                        <textarea id="cursoMensagem" placeholder='Certificamos que, o(a) aluno(a) **{NOME_ALUNO}**, portador(a) do CPF **{CPF_ALUNO}**, participou do curso de **{NOME_CURSO}**, realizado no período de **{DATA_INICIO}** a **{DATA_FIM}**, com carga horária total de **{CARGA_HORARIA}**, promovido pela empresa \n **{NOME_EMPRESA}**.
                         
                         {CIDADE_EMPRESA}, {DATA_ATUAL_COMPLETA}.'></textarea>
                     </div>
@@ -691,7 +820,16 @@ async function removeItem(node, id){
 }
 
 function renderEmpresas(){
-    const empresas = getArrayFromData(empresasData);
+    const termo = (el("empresaBuscaRapida")?.value || "").trim().toLowerCase();
+
+    const empresas = getArrayFromData(empresasData).filter(e => {
+        if (!termo) return true;
+        const nome = (e.nome || "").toLowerCase();
+        const cidade = (e.cidade || "").toLowerCase();
+        const certificador = (e.certificadorNome || "").toLowerCase();
+        return nome.includes(termo) || cidade.includes(termo) || certificador.includes(termo);
+    });
+
     el("tabelaEmpresas").innerHTML =
         `<tr><th>Empresa</th><th>Cidade</th><th>Certificador</th><th>Ações</th></tr>`+
         empresas.map(e=>`<tr>
@@ -703,9 +841,10 @@ function renderEmpresas(){
                 <button class="danger" onclick="window.deleteEmpresa('${e.id}')">Excluir</button>
             </td>
         </tr>`).join("");
-    
-    const empresaOptions = empresas.map(e=>`<option value="${e.id}">${e.nome}</option>`).join("");
-    
+
+    const todasEmpresas = getArrayFromData(empresasData);
+    const empresaOptions = todasEmpresas.map(e=>`<option value="${e.id}">${e.nome}</option>`).join("");
+
     el("selEmpresa").innerHTML='<option value="">Selecione a empresa...</option>'+ empresaOptions;
     el("alunoEmpresaVinculo").innerHTML='<option value="">Selecione a empresa...</option>'+ empresaOptions;
 
@@ -1812,8 +1951,54 @@ window.addEventListener('DOMContentLoaded', () => {
     el("btnApagarCertificados").onclick=window.clearAllCertificados;
     el("btnTransferirAlunos").onclick=transferirAlunosEmMassa;
     el("alunoBuscaRapida").addEventListener("input", renderAlunos);
+    el("empresaBuscaRapida").addEventListener("input", renderEmpresas);
+
 });
 
+</script>
+<script>
+(function () {
+  const USER = "wedson";
+  const PASS = "2026";
+
+  const loginScreen = document.getElementById("loginScreen");
+  const appShell = document.getElementById("appShell");
+  const loginUsuario = document.getElementById("loginUsuario");
+  const loginSenha = document.getElementById("loginSenha");
+  const btnEntrar = document.getElementById("btnEntrarSistema");
+  const btnLogout = document.getElementById("btnLogout");
+  const loginError = document.getElementById("loginError");
+
+  function entrar() {
+    const usuario = (loginUsuario.value || "").trim();
+    const senha = (loginSenha.value || "").trim();
+
+    if (usuario === USER && senha === PASS) {
+      loginError.style.display = "none";
+      loginScreen.style.display = "none";
+      appShell.style.display = "block";
+    } else {
+      loginError.style.display = "block";
+    }
+  }
+
+  function sair() {
+    appShell.style.display = "none";
+    loginScreen.style.display = "flex";
+    loginUsuario.value = "";
+    loginSenha.value = "";
+    loginError.style.display = "none";
+  }
+
+  btnEntrar.addEventListener("click", entrar);
+  loginSenha.addEventListener("keydown", function (e) {
+    if (e.key === "Enter") entrar();
+  });
+
+  if (btnLogout) {
+    btnLogout.addEventListener("click", sair);
+  }
+})();
 </script>
 
 </body>
